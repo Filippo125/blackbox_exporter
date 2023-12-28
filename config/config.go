@@ -223,6 +223,7 @@ type HTTPProbe struct {
 	HTTPClientConfig             config.HTTPClientConfig `yaml:"http_client_config,inline"`
 	Compression                  string                  `yaml:"compression,omitempty"`
 	BodySizeLimit                units.Base2Bytes        `yaml:"body_size_limit,omitempty"`
+	SourceIPAddress              string                  `yaml:"source_ip_address,omitempty"`
 }
 
 type GRPCProbe struct {

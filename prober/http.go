@@ -348,10 +348,34 @@ func ProbeHTTP(ctx context.Context, target string, module config.Module, registr
 			}
 		}
 	}
+
 	client, err := pconfig.NewClientFromConfig(httpClientConfig, "http_probe", pconfig.WithKeepAlivesDisabled())
 	if err != nil {
 		level.Error(logger).Log("msg", "Error generating HTTP client", "err", err)
 		return false
+	}
+	var srcIP net.IP
+	if module.HTTP.SourceIPAddress != "" {
+		if srcIP = net.ParseIP(module.HTTP.SourceIPAddress); err != nil {
+			level.Error(logger).Log("msg", "Error parsing source ip address", "srcIP", module.HTTP.SourceIPAddress)
+			return false
+		}
+		level.Info(logger).Log("msg", "Using source address", "srcIP", srcIP)
+		client.Transport = &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+				LocalAddr: &net.TCPAddr{
+					IP:   srcIP,
+					Port: 0,
+				},
+			}).DialContext,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		}
 	}
 
 	httpClientConfig.TLSConfig.ServerName = ""
