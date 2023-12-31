@@ -322,10 +322,19 @@ func ProbeHTTP(ctx context.Context, target string, module config.Module, registr
 	targetHost := targetURL.Hostname()
 	targetPort := targetURL.Port()
 
+	var srcIP net.IP
+	if module.HTTP.SourceIPAddress != "" {
+		if srcIP = net.ParseIP(module.HTTP.SourceIPAddress); srcIP == nil {
+			level.Error(logger).Log("msg", "Error parsing source ip address", "srcIP", module.HTTP.SourceIPAddress)
+			return false
+		}
+
+	}
+
 	var ip *net.IPAddr
 	if !module.HTTP.SkipResolvePhaseWithProxy || module.HTTP.HTTPClientConfig.ProxyConfig.ProxyURL.URL == nil || module.HTTP.HTTPClientConfig.ProxyConfig.ProxyFromEnvironment {
 		var lookupTime float64
-		ip, lookupTime, err = chooseProtocol(ctx, module.HTTP.IPProtocol, module.HTTP.IPProtocolFallback, targetHost, registry, logger)
+		ip, lookupTime, err = chooseProtocol(ctx, module.HTTP.IPProtocol, module.HTTP.IPProtocolFallback, targetHost, &srcIP, registry, logger)
 		durationGaugeVec.WithLabelValues("resolve").Add(lookupTime)
 		if err != nil {
 			level.Error(logger).Log("msg", "Error resolving address", "err", err)
@@ -354,27 +363,16 @@ func ProbeHTTP(ctx context.Context, target string, module config.Module, registr
 		level.Error(logger).Log("msg", "Error generating HTTP client", "err", err)
 		return false
 	}
-	var srcIP net.IP
 	if module.HTTP.SourceIPAddress != "" {
-		if srcIP = net.ParseIP(module.HTTP.SourceIPAddress); err != nil {
-			level.Error(logger).Log("msg", "Error parsing source ip address", "srcIP", module.HTTP.SourceIPAddress)
-			return false
-		}
 		level.Info(logger).Log("msg", "Using source address", "srcIP", srcIP)
 		client.Transport = &http.Transport{
 			Proxy: http.ProxyFromEnvironment,
 			DialContext: (&net.Dialer{
-				Timeout:   30 * time.Second,
-				KeepAlive: 30 * time.Second,
 				LocalAddr: &net.TCPAddr{
 					IP:   srcIP,
 					Port: 0,
 				},
 			}).DialContext,
-			MaxIdleConns:          100,
-			IdleConnTimeout:       90 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
 		}
 	}
 

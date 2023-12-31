@@ -88,14 +88,6 @@ func ProbeICMP(ctx context.Context, target string, module config.Module, registr
 
 	registry.MustRegister(durationGaugeVec)
 
-	dstIPAddr, lookupTime, err := chooseProtocol(ctx, module.ICMP.IPProtocol, module.ICMP.IPProtocolFallback, target, registry, logger)
-
-	if err != nil {
-		level.Error(logger).Log("msg", "Error resolving address", "err", err)
-		return false
-	}
-	durationGaugeVec.WithLabelValues("resolve").Add(lookupTime)
-
 	var srcIP net.IP
 	if len(module.ICMP.SourceIPAddress) > 0 {
 		if srcIP = net.ParseIP(module.ICMP.SourceIPAddress); srcIP == nil {
@@ -104,6 +96,14 @@ func ProbeICMP(ctx context.Context, target string, module config.Module, registr
 		}
 		level.Info(logger).Log("msg", "Using source address", "srcIP", srcIP)
 	}
+
+	dstIPAddr, lookupTime, err := chooseProtocol(ctx, module.ICMP.IPProtocol, module.ICMP.IPProtocolFallback, target, &srcIP, registry, logger)
+
+	if err != nil {
+		level.Error(logger).Log("msg", "Error resolving address", "err", err)
+		return false
+	}
+	durationGaugeVec.WithLabelValues("resolve").Add(lookupTime)
 
 	setupStart := time.Now()
 	level.Info(logger).Log("msg", "Creating socket")
